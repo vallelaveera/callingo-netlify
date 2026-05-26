@@ -764,13 +764,25 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f7f4;min-height:1
         <div style="font-size:12px;color:rgba(255,255,255,0.5);" id="ai-timer">0:00</div>
       </div>
     </div>
-    <button onclick="endAICall()" style="background:var(--red);border:none;border-radius:50%;width:34px;height:34px;color:white;font-size:14px;cursor:pointer;">📵</button>
+    <button onclick="endAICall()" style="background:#c0392b;border:none;border-radius:24px;padding:10px 18px;color:white;font-size:14px;font-weight:700;cursor:pointer;min-width:80px;">📵 End</button>
   </div>
   <div class="ai-topic-chip" id="ai-topic-chip"></div>
   <div class="ai-call-body" id="ai-messages"></div>
-  <div class="ai-bottom">
-    <div class="ai-status-text" id="ai-status">Starting conversation…</div>
-    <div class="ai-input-row">
+  <div style="background:#0a1a0f;padding:16px 16px 28px;display:flex;flex-direction:column;align-items:center;gap:12px;flex-shrink:0;border-top:1px solid #1a2f1a;">
+    <div id="ai-status" style="font-size:12px;color:rgba(255,255,255,0.5);text-align:center;min-height:18px;"></div>
+    <div id="call-wave" style="display:flex;align-items:center;gap:3px;height:32px;"></div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:28px;width:100%;">
+      <button id="mute-call-btn" onclick="toggleCallMute()" style="width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,0.1);border:none;cursor:pointer;font-size:22px;">🎤</button>
+      <button id="main-mic-btn" onclick="toggleCallMic()" style="width:76px;height:76px;border-radius:50%;background:#2e7d52;border:3px solid rgba(255,255,255,0.2);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px rgba(46,125,82,0.5);transition:all 0.2s;">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="white" id="main-mic-icon"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zm-1 13.93A5 5 0 0 1 7 10H5a7 7 0 0 0 6 6.93V20H8v2h8v-2h-3v-3.07A7 7 0 0 0 19 10h-2a5 5 0 0 1-4 4.93z"/></svg>
+      </button>
+      <button onclick="toggleKeyboard()" style="width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,0.1);border:none;cursor:pointer;font-size:22px;">⌨️</button>
+    </div>
+    <div id="text-input-row" style="display:none;gap:8px;width:100%;">
+      <input class="ai-input" id="ai-input" placeholder="Type here…" onkeydown="if(event.key==='Enter')sendMessage()" style="font-size:13px;padding:9px 12px;"/>
+      <button class="ai-send" id="ai-send-btn" onclick="sendMessage()" style="padding:9px 14px;font-size:13px;">Send</button>
+    </div>
+    <div style="display:flex;gap:8px;width:100%;">
       <button class="mic-btn" id="mic-btn" onmousedown="startMic()" onmouseup="stopMic()" ontouchstart="event.preventDefault();startMic()" ontouchend="event.preventDefault();stopMic()"><svg width="20" height="20" viewBox="0 0 24 24" fill="#2e7d52" id="mic-icon"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zm-1 13.93A5 5 0 0 1 7 10H5a7 7 0 0 0 6 6.93V20H8v2h8v-2h-3v-3.07A7 7 0 0 0 19 10h-2a5 5 0 0 1-4 4.93z"/></svg></button><input class="ai-input" id="ai-input" placeholder="Hold 🎤 or type here…" onkeydown="if(event.key==='Enter')sendMessage()"/>
       <button class="ai-send" id="ai-send-btn" onclick="sendMessage()">Send</button>
       <button class="ai-hangup" onclick="endAICall()">📵</button>
@@ -1563,7 +1575,126 @@ function addTyping(){
 }
 function removeTyping(){const b=document.getElementById('typing-bubble');if(b)b.remove();}
 
-function setAIStatus(t){document.getElementById('ai-status').textContent=t;}
+function setAIStatus(t){
+  const el=document.getElementById('ai-status');
+  if(el) el.textContent=t;
+}
+
+let micRecognition=null, micActive=false, callMuted=false, keyboardVisible=false;
+let waveInt=null;
+
+function buildCallWave(){
+  const wf=document.getElementById('call-wave');
+  if(!wf) return;
+  wf.innerHTML='';
+  for(let i=0;i<22;i++){
+    const d=document.createElement('div');
+    d.style.cssText='width:3px;border-radius:2px;background:rgba(255,255,255,0.5);transition:height 0.1s;height:4px;';
+    wf.appendChild(d);
+  }
+}
+
+function animateWaveActive(on){
+  if(waveInt) clearInterval(waveInt);
+  if(on){
+    waveInt=setInterval(()=>{
+      document.querySelectorAll('#call-wave div').forEach(l=>{
+        l.style.height=(6+Math.random()*26)+'px';
+        l.style.opacity='0.8';
+      });
+    },120);
+  } else {
+    document.querySelectorAll('#call-wave div').forEach(l=>{ l.style.height='4px'; l.style.opacity='0.2'; });
+  }
+}
+
+function setMicState(state){
+  const btn=document.getElementById('main-mic-btn');
+  const status=document.getElementById('ai-status');
+  const states={
+    speaking:{bg:'#1a3a1a',shadow:'none',label:'🔊 Mia is speaking…',wave:true},
+    listening:{bg:'#2e7d52',shadow:'0 0 0 14px rgba(46,125,82,0.2)',label:callMuted?'🔇 Muted':'🎤 Listening…',wave:true},
+    processing:{bg:'#8a5200',shadow:'none',label:'⏳ Processing…',wave:false},
+    idle:{bg:'#2e7d52',shadow:'0 4px 24px rgba(46,125,82,0.5)',label:'Tap 🎤 to speak',wave:false},
+  };
+  const s=states[state]||states.idle;
+  if(btn){btn.style.background=s.bg;btn.style.boxShadow=s.shadow;}
+  if(status) status.textContent=s.label;
+  animateWaveActive(s.wave);
+}
+
+function toggleCallMute(){
+  callMuted=!callMuted;
+  const btn=document.getElementById('mute-call-btn');
+  if(btn) btn.textContent=callMuted?'🔇':'🎤';
+  if(callMuted&&micActive) stopAutoListen();
+  setMicState(micActive?'listening':'idle');
+}
+
+function toggleCallMic(){
+  if(isSpeaking) return;
+  if(micActive){stopAutoListen();setMicState('idle');}
+  else startAutoListen();
+}
+
+function toggleKeyboard(){
+  keyboardVisible=!keyboardVisible;
+  const row=document.getElementById('text-input-row');
+  if(row) row.style.display=keyboardVisible?'flex':'none';
+  if(keyboardVisible) setTimeout(()=>document.getElementById('ai-input')?.focus(),100);
+}
+
+function startAutoListen(){
+  if(callMuted||isSpeaking||micActive) return;
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){
+    setAIStatus('⚠️ Use Chrome for voice — or tap ⌨️ to type');
+    if(!keyboardVisible) toggleKeyboard();
+    return;
+  }
+  speechSynthesis.cancel();
+  micActive=true;
+  setMicState('listening');
+  micRecognition=new SR();
+  const langMap={'en':'en-GB','de':'de-DE','es':'es-ES','fr':'fr-FR','jp':'ja-JP','zh':'zh-CN','it':'it-IT','pt':'pt-BR','ko':'ko-KR','ar':'ar-SA','hi':'hi-IN'};
+  micRecognition.lang=langMap[selLang?.code]||'en-US';
+  micRecognition.interimResults=false;
+  micRecognition.maxAlternatives=1;
+  micRecognition.onresult=(e)=>{
+    const text=e.results[0][0].transcript;
+    if(text.trim()){
+      const inp=document.getElementById('ai-input');
+      if(inp) inp.value=text;
+      stopAutoListen();
+      setTimeout(()=>sendMessage(),150);
+    }
+  };
+  micRecognition.onerror=(ev)=>{
+    stopAutoListen();
+    if(ev.error==='no-speech') setTimeout(startAutoListen,800);
+    else setMicState('idle');
+  };
+  micRecognition.onend=()=>{if(micActive){micActive=false;}};
+  try{micRecognition.start();}catch(e){stopAutoListen();}
+}
+
+function stopAutoListen(){
+  micActive=false;
+  if(micRecognition){try{micRecognition.stop();}catch(e){}micRecognition=null;}
+}
+
+const _origDisplayMia=displayMia;
+async function displayMia(data){
+  stopAutoListen();
+  buildCallWave();
+  setMicState('speaking');
+  await _origDisplayMia(data);
+  if(!callMuted) setTimeout(startAutoListen,600);
+  else setMicState('idle');
+}
+
+function startMic(){startAutoListen();}
+function stopMic(){stopAutoListen();}
 
 // Detect if input is mostly English (not target language)
 function isEnglishInput(text){
