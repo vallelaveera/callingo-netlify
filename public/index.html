@@ -1543,6 +1543,9 @@ async function startAICall(topicIdx){
 }
 
 async function displayMia(data){
+  stopAutoListen();
+  buildCallWave();
+  setMicState('speaking');
   aiMsgs.push({...data,role:'mia'});
   aiHistory.push({role:'assistant',content:JSON.stringify({german:data.german,english:data.english})});
   addBubble(data.german,data.english,'mia');
@@ -1552,8 +1555,8 @@ async function displayMia(data){
   await speak(data.german);
   document.getElementById('ai-input').disabled=false;
   document.getElementById('ai-send-btn').disabled=false;
-  setAIStatus('Your turn — type your reply');
-  document.getElementById('ai-input').focus();
+  setMicState('idle');
+  if(!callMuted) startAutoListen();
 }
 
 function addBubble(de,en,role){
@@ -1683,15 +1686,7 @@ function stopAutoListen(){
   if(micRecognition){try{micRecognition.stop();}catch(e){}micRecognition=null;}
 }
 
-const _origDisplayMia=displayMia;
-async function displayMia(data){
-  stopAutoListen();
-  buildCallWave();
-  setMicState('speaking');
-  await _origDisplayMia(data);
-  if(!callMuted) setTimeout(startAutoListen,600);
-  else setMicState('idle');
-}
+// displayMia already handles auto-listen via isSpeaking flag
 
 function startMic(){startAutoListen();}
 function stopMic(){stopAutoListen();}
@@ -2455,43 +2450,3 @@ setTimeout(initDailyVocab, 100);
 </script>
 </body>
 </html>
-<script>
-let micRecognition=null;
-let micActive=false;
-
-function startMic(){
-  if(isSpeaking||micActive) return;
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ setAIStatus('⚠️ Use Chrome for mic support'); return; }
-  speechSynthesis.cancel();
-  micActive=true;
-  const btn=document.getElementById('mic-btn');
-  const icon=document.getElementById('mic-icon');
-  if(btn) btn.classList.add('recording');
-  if(icon) icon.setAttribute('fill','white');
-  setAIStatus('🎤 Listening… speak now');
-  micRecognition=new SR();
-  const langMap={'en':'en-GB','de':'de-DE','es':'es-ES','fr':'fr-FR','jp':'ja-JP','zh':'zh-CN','it':'it-IT','pt':'pt-BR','ko':'ko-KR','ar':'ar-SA','hi':'hi-IN'};
-  micRecognition.lang=langMap[selLang?.code]||'en-US';
-  micRecognition.interimResults=false;
-  micRecognition.maxAlternatives=1;
-  micRecognition.onresult=(e)=>{
-    const text=e.results[0][0].transcript;
-    document.getElementById('ai-input').value=text;
-    stopMic();
-    setTimeout(()=>sendMessage(),200);
-  };
-  micRecognition.onerror=()=>{ stopMic(); setAIStatus('⚠️ Could not hear — try again'); };
-  micRecognition.onend=()=>{ if(micActive) stopMic(); };
-  micRecognition.start();
-}
-
-function stopMic(){
-  micActive=false;
-  if(micRecognition){ try{ micRecognition.stop(); }catch(e){} }
-  const btn=document.getElementById('mic-btn');
-  const icon=document.getElementById('mic-icon');
-  if(btn) btn.classList.remove('recording');
-  if(icon) icon.setAttribute('fill','#2e7d52');
-}
-</script>
