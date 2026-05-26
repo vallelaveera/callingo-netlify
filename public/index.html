@@ -1264,7 +1264,7 @@ let aiTimerInt=null, callTimerInt=null;
 let isSpeaking=false, isMuted=false, isOnline=false;
 let incomingTimeout=null;
 
-const API='/api/claude'; // Netlify proxy — key stays on server
+const API='/.netlify/functions/claude';
 const MDL='claude-sonnet-4-20250514';
 
 // ✅ API key is now stored in Netlify environment variables
