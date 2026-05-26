@@ -782,11 +782,6 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f7f4;min-height:1
       <input class="ai-input" id="ai-input" placeholder="Type here…" onkeydown="if(event.key==='Enter')sendMessage()" style="font-size:13px;padding:9px 12px;"/>
       <button class="ai-send" id="ai-send-btn" onclick="sendMessage()" style="padding:9px 14px;font-size:13px;">Send</button>
     </div>
-    <div style="display:flex;gap:8px;width:100%;">
-      <button class="mic-btn" id="mic-btn" onmousedown="startMic()" onmouseup="stopMic()" ontouchstart="event.preventDefault();startMic()" ontouchend="event.preventDefault();stopMic()"><svg width="20" height="20" viewBox="0 0 24 24" fill="#2e7d52" id="mic-icon"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zm-1 13.93A5 5 0 0 1 7 10H5a7 7 0 0 0 6 6.93V20H8v2h8v-2h-3v-3.07A7 7 0 0 0 19 10h-2a5 5 0 0 1-4 4.93z"/></svg></button><input class="ai-input" id="ai-input" placeholder="Hold 🎤 or type here…" onkeydown="if(event.key==='Enter')sendMessage()"/>
-      <button class="ai-send" id="ai-send-btn" onclick="sendMessage()">Send</button>
-      <button class="ai-hangup" onclick="endAICall()">📵</button>
-    </div>
   </div>
 </div>
 
@@ -805,7 +800,6 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f7f4;min-height:1
         <div class="score-num" id="report-score">—</div>
         <div class="score-denom">/100</div>
       </div>
-    </div>
     </div>
     <div class="score-bar-wrap">
       <div class="score-bar-label"><span>Performance</span><span id="score-label-text">Calculating…</span></div>
@@ -1281,7 +1275,7 @@ let isSpeaking=false, isMuted=false, isOnline=false;
 let incomingTimeout=null;
 
 const API='/.netlify/functions/claude';
-const MDL='claude-sonnet-4-20250514';
+const MDL='claude-haiku-4-5-20251001';
 
 // ✅ API key is now stored in Netlify environment variables
 // No key needed here — the server handles it securely
@@ -1531,6 +1525,7 @@ async function startAICall(topicIdx){
   const langName=selLang.name;
   const dynamicSystem=selTopic.system
     + ' IMPORTANT: You MUST speak and respond ONLY in ' + langName + '. All your "german" field content must be in ' + langName + ', not English. The "english" field should be the English translation.'
+    + ' BREVITY: Keep every reply to 1-2 short sentences (max ~20 words). Always end with exactly one short question. Never explain at length.'
     + ' LEVEL INSTRUCTION: ' + (levelInstructions[selLevel]||levelInstructions.beginner);
 
   selTopic.activeSystem=dynamicSystem;
@@ -1717,7 +1712,7 @@ async function callAPI(messages, system, cacheKey){
   const res=await fetch(API,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:MDL,max_tokens:1000,system,messages})
+    body:JSON.stringify({model:MDL,max_tokens:200,system,messages})
   });
   if(!res.ok){
     const err=await res.json().catch(()=>({}));
@@ -1800,6 +1795,7 @@ function endAICall(){
   try{
     clearInterval(aiTimerInt);
     speechSynthesis.cancel();
+    stopAutoListen();
     isSpeaking=false;
     document.getElementById('ai-input').disabled=false;
     document.getElementById('ai-send-btn').disabled=false;
