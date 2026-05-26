@@ -215,6 +215,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f7f4;min-height:1
 .ai-input:focus{border-color:var(--green);}
 .ai-send{background:var(--green);border:none;border-radius:12px;padding:11px 16px;color:white;font-weight:600;cursor:pointer;font-family:inherit;font-size:14px;}
 .ai-send:disabled{opacity:0.4;cursor:default;}
+.mic-btn{width:48px;height:48px;border-radius:50%;border:2px solid var(--green);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;flex-shrink:0;}
+.mic-btn.recording{background:var(--green);box-shadow:0 0 0 8px rgba(46,125,82,0.2);animation:micpulse 1s infinite;}
+.mic-btn:disabled{opacity:0.3;cursor:default;}
+@keyframes micpulse{0%,100%{box-shadow:0 0 0 0 rgba(46,125,82,0.3);}50%{box-shadow:0 0 0 10px rgba(46,125,82,0);}}
 .ai-hangup{background:#1a2f1a;border:none;border-radius:12px;padding:11px 14px;color:rgba(255,255,255,0.7);cursor:pointer;font-size:16px;}
 
 /* REPORT */
@@ -767,7 +771,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f7f4;min-height:1
   <div class="ai-bottom">
     <div class="ai-status-text" id="ai-status">Starting conversation…</div>
     <div class="ai-input-row">
-      <input class="ai-input" id="ai-input" placeholder="Type in the language you're learning…" onkeydown="if(event.key==='Enter')sendMessage()"/>
+      <button class="mic-btn" id="mic-btn" onmousedown="startMic()" onmouseup="stopMic()" ontouchstart="event.preventDefault();startMic()" ontouchend="event.preventDefault();stopMic()"><svg width="20" height="20" viewBox="0 0 24 24" fill="#2e7d52" id="mic-icon"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zm-1 13.93A5 5 0 0 1 7 10H5a7 7 0 0 0 6 6.93V20H8v2h8v-2h-3v-3.07A7 7 0 0 0 19 10h-2a5 5 0 0 1-4 4.93z"/></svg></button><input class="ai-input" id="ai-input" placeholder="Hold 🎤 or type here…" onkeydown="if(event.key==='Enter')sendMessage()"/>
       <button class="ai-send" id="ai-send-btn" onclick="sendMessage()">Send</button>
       <button class="ai-hangup" onclick="endAICall()">📵</button>
     </div>
@@ -2320,3 +2324,43 @@ setTimeout(initDailyVocab, 100);
 </script>
 </body>
 </html>
+<script>
+let micRecognition=null;
+let micActive=false;
+
+function startMic(){
+  if(isSpeaking||micActive) return;
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ setAIStatus('⚠️ Use Chrome for mic support'); return; }
+  speechSynthesis.cancel();
+  micActive=true;
+  const btn=document.getElementById('mic-btn');
+  const icon=document.getElementById('mic-icon');
+  if(btn) btn.classList.add('recording');
+  if(icon) icon.setAttribute('fill','white');
+  setAIStatus('🎤 Listening… speak now');
+  micRecognition=new SR();
+  const langMap={'en':'en-GB','de':'de-DE','es':'es-ES','fr':'fr-FR','jp':'ja-JP','zh':'zh-CN','it':'it-IT','pt':'pt-BR','ko':'ko-KR','ar':'ar-SA','hi':'hi-IN'};
+  micRecognition.lang=langMap[selLang?.code]||'en-US';
+  micRecognition.interimResults=false;
+  micRecognition.maxAlternatives=1;
+  micRecognition.onresult=(e)=>{
+    const text=e.results[0][0].transcript;
+    document.getElementById('ai-input').value=text;
+    stopMic();
+    setTimeout(()=>sendMessage(),200);
+  };
+  micRecognition.onerror=()=>{ stopMic(); setAIStatus('⚠️ Could not hear — try again'); };
+  micRecognition.onend=()=>{ if(micActive) stopMic(); };
+  micRecognition.start();
+}
+
+function stopMic(){
+  micActive=false;
+  if(micRecognition){ try{ micRecognition.stop(); }catch(e){} }
+  const btn=document.getElementById('mic-btn');
+  const icon=document.getElementById('mic-icon');
+  if(btn) btn.classList.remove('recording');
+  if(icon) icon.setAttribute('fill','#2e7d52');
+}
+</script>
