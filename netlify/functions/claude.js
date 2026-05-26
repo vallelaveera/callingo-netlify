@@ -31,12 +31,12 @@ exports.handler = async (event) => {
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: { message: 'API key not configured' } }),
+        body: JSON.stringify({ error: { message: 'API key not configured on server' } }),
       };
     }
 
     const payload = JSON.stringify({
-      model: body.model || 'claude-sonnet-4-20250514',
+      model: 'claude-opus-4-5',
       max_tokens: body.max_tokens || 1000,
       system: body.system,
       messages: body.messages,
@@ -59,6 +59,8 @@ exports.handler = async (event) => {
         let data = '';
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
+          console.log('Anthropic status:', res.statusCode);
+          console.log('Anthropic response:', data.substring(0, 200));
           resolve({ status: res.statusCode, body: data });
         });
       });
@@ -75,6 +77,7 @@ exports.handler = async (event) => {
     };
 
   } catch (err) {
+    console.log('Function error:', err.message);
     return {
       statusCode: 500,
       headers,
