@@ -1,0 +1,21 @@
+node_modules/
+.DS_Store
+*.log
+
+# Capacitor / Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+android/app/release/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# Wrangler
+.wrangler/
+cloudflare/.dev.vars
+.dev.vars

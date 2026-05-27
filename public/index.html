@@ -328,6 +328,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f7f4;min-height:1
 .ob-dot{width:8px;height:8px;border-radius:50%;background:#ddd;transition:background 0.2s;}
 .ob-dot.active{background:var(--green);}
 </style>
+<script src="config.js"></script>
 </head>
 <body>
 <div id="app">
@@ -1274,7 +1275,7 @@ let aiTimerInt=null, callTimerInt=null;
 let isSpeaking=false, isMuted=false, isOnline=false;
 let incomingTimeout=null;
 
-const API='/.netlify/functions/claude';
+const API=(window.APP_CONFIG&&window.APP_CONFIG.apiUrl)||'/.netlify/functions/claude';
 const MDL='claude-haiku-4-5-20251001';
 
 // ✅ API key is now stored in Netlify environment variables
@@ -1642,8 +1643,56 @@ function toggleKeyboard(){
   if(keyboardVisible) setTimeout(()=>document.getElementById('ai-input')?.focus(),100);
 }
 
+const LANG_MAP={'en':'en-GB','de':'de-DE','es':'es-ES','fr':'fr-FR','jp':'ja-JP','zh':'zh-CN','it':'it-IT','pt':'pt-BR','ko':'ko-KR','ar':'ar-SA','hi':'hi-IN'};
+
+function isNativePlatform(){
+  return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+}
+
+async function nativeListenOnce(lang){
+  const SR=window.Capacitor?.Plugins?.SpeechRecognition;
+  if(!SR) throw new Error('plugin-missing');
+  const perm=await SR.checkPermissions().catch(()=>({speechRecognition:'denied'}));
+  if(perm.speechRecognition!=='granted'){
+    const req=await SR.requestPermissions().catch(()=>({speechRecognition:'denied'}));
+    if(req.speechRecognition!=='granted') throw new Error('permission-denied');
+  }
+  const res=await SR.start({language:lang,maxResults:1,partialResults:false,popup:false});
+  return (res?.matches&&res.matches[0])||'';
+}
+
+function handleHeardText(text){
+  if(!text||!text.trim()) return;
+  const inp=document.getElementById('ai-input');
+  if(inp) inp.value=text;
+  stopAutoListen();
+  setTimeout(()=>sendMessage(),150);
+}
+
 function startAutoListen(){
   if(callMuted||isSpeaking||micActive) return;
+  const lang=LANG_MAP[selLang?.code]||'en-US';
+
+  if(isNativePlatform()){
+    speechSynthesis.cancel();
+    micActive=true;
+    setMicState('listening');
+    nativeListenOnce(lang).then(text=>{
+      if(!micActive) return;
+      if(text&&text.trim()) handleHeardText(text);
+      else { micActive=false; setTimeout(startAutoListen,400); }
+    }).catch(err=>{
+      micActive=false;
+      if(err&&err.message==='permission-denied'){
+        setAIStatus('⚠️ Mic permission denied');
+        setMicState('idle');
+      } else {
+        setMicState('idle');
+      }
+    });
+    return;
+  }
+
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){
     setAIStatus('⚠️ Use Chrome for voice — or tap ⌨️ to type');
@@ -1654,18 +1703,12 @@ function startAutoListen(){
   micActive=true;
   setMicState('listening');
   micRecognition=new SR();
-  const langMap={'en':'en-GB','de':'de-DE','es':'es-ES','fr':'fr-FR','jp':'ja-JP','zh':'zh-CN','it':'it-IT','pt':'pt-BR','ko':'ko-KR','ar':'ar-SA','hi':'hi-IN'};
-  micRecognition.lang=langMap[selLang?.code]||'en-US';
+  micRecognition.lang=lang;
   micRecognition.interimResults=false;
   micRecognition.maxAlternatives=1;
   micRecognition.onresult=(e)=>{
     const text=e.results[0][0].transcript;
-    if(text.trim()){
-      const inp=document.getElementById('ai-input');
-      if(inp) inp.value=text;
-      stopAutoListen();
-      setTimeout(()=>sendMessage(),150);
-    }
+    handleHeardText(text);
   };
   micRecognition.onerror=(ev)=>{
     stopAutoListen();
@@ -1679,6 +1722,9 @@ function startAutoListen(){
 function stopAutoListen(){
   micActive=false;
   if(micRecognition){try{micRecognition.stop();}catch(e){}micRecognition=null;}
+  if(isNativePlatform()){
+    try{window.Capacitor?.Plugins?.SpeechRecognition?.stop();}catch(e){}
+  }
 }
 
 // displayMia already handles auto-listen via isSpeaking flag
@@ -1720,10 +1766,36 @@ async function callAPI(messages, system, cacheKey){
   }
   const d=await res.json();
   let raw=(d.content||[]).map(c=>c.text||'').join('').replace(/```json|```/g,'').trim();
-  const parsed=JSON.parse(raw);
+  const parsed=extractJSON(raw);
   // Save to cache if key provided
   if(cacheKey) cacheSet(cacheKey,parsed);
   return parsed;
+}
+
+// Tolerant JSON extractor: returns the first balanced {...} or [...] block.
+// Handles Haiku occasionally emitting prose after the JSON.
+function extractJSON(text){
+  try { return JSON.parse(text); } catch(_) {}
+  const start=text.search(/[\{\[]/);
+  if(start<0) throw new Error('No JSON object in model response');
+  const open=text[start], close=open==='{'?'}':']';
+  let depth=0, inStr=false, esc=false;
+  for(let i=start;i<text.length;i++){
+    const ch=text[i];
+    if(inStr){
+      if(esc){esc=false;continue;}
+      if(ch==='\\'){esc=true;continue;}
+      if(ch==='"'){inStr=false;}
+      continue;
+    }
+    if(ch==='"'){inStr=true;continue;}
+    if(ch===open) depth++;
+    else if(ch===close){
+      depth--;
+      if(depth===0) return JSON.parse(text.slice(start,i+1));
+    }
+  }
+  throw new Error('Unbalanced JSON in model response');
 }
 
 async function sendMessage(){
@@ -1767,7 +1839,7 @@ The "german" field is your response in ${nativeLangName} with the ${selLang.name
       await displayMia(parsed);
     }catch(e){
       removeTyping();
-      setAIStatus(`❌ Error: ${e.message}. Check your API key.`);
+      setAIStatus(`❌ Error: ${e.message}`);
       document.getElementById('ai-input').disabled=false;
       document.getElementById('ai-send-btn').disabled=false;
     }
@@ -1785,7 +1857,7 @@ The "german" field is your response in ${nativeLangName} with the ${selLang.name
     await displayMia(parsed);
   }catch(e){
     removeTyping();
-    setAIStatus(`❌ Error: ${e.message}. Check your API key.`);
+    setAIStatus(`❌ Error: ${e.message}`);
     document.getElementById('ai-input').disabled=false;
     document.getElementById('ai-send-btn').disabled=false;
   }

@@ -1,0 +1,8 @@
+{
+  "appId": "com.callingo.app",
+  "appName": "Callingo",
+  "webDir": "public",
+  "android": {
+    "allowMixedContent": false
+  }
+}
