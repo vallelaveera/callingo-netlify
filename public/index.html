@@ -1550,6 +1550,7 @@ async function startAICall(topicIdx){
 
 async function displayMia(data){
   stopAutoListen();
+  stopFillers();
   buildCallWave();
   setMicState('speaking');
   aiMsgs.push({...data,role:'mia'});
@@ -1759,17 +1760,44 @@ function cacheSet(key,val){
   try{ localStorage.setItem('cc_'+key,JSON.stringify(val)); }catch(e){}
 }
 
+// Filler utterances for natural conversation feel during API wait
+const FILLERS={'en':['I see','Mm-hmm','Right','Yeah','Okay','Um','Uh','Let me think','Got it','Good','Interesting','Sure','I understand','That\'s good','Nice','Cool','Go on','Tell me more','I hear you','Absolutely']};
+let fillerLoop=null;
+
+function startFillers(){
+  stopFillers();
+  const langCode=selLang?.code||'en';
+  const fillers=FILLERS[langCode]||FILLERS['en'];
+  if(!fillers||fillers.length===0)return;
+  function playRandomFiller(){
+    const filler=fillers[Math.floor(Math.random()*fillers.length)];
+    const u=new SpeechSynthesisUtterance(filler);
+    const langMap={'en':'en-GB','de':'de-DE','es':'es-ES','fr':'fr-FR','jp':'ja-JP','zh':'zh-CN','it':'it-IT','pt':'pt-BR','ko':'ko-KR','ar':'ar-SA','hi':'hi-IN'};
+    u.lang=langMap[langCode]||'en-US';
+    u.rate=0.88;u.pitch=1.05;
+    speechSynthesis.speak(u);
+    fillerLoop=setTimeout(playRandomFiller,3000+Math.random()*2000);
+  }
+  playRandomFiller();
+}
+
+function stopFillers(){
+  if(fillerLoop){clearTimeout(fillerLoop);fillerLoop=null;}
+}
+
 async function callAPI(messages, system, cacheKey){
   // Check cache first if a key is provided
   if(cacheKey){
     const cached=cacheGet(cacheKey);
     if(cached){ console.log('Cache hit:',cacheKey); return cached; }
   }
+  startFillers();
   const res=await fetch(API,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({model:MDL,max_tokens:200,system,messages})
   });
+  stopFillers();
   if(!res.ok){
     const err=await res.json().catch(()=>({}));
     throw new Error(err.error?.message||`API error ${res.status}`);
