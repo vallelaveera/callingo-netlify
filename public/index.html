@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Callingo — Learn Languages Through Real Calls</title>
+<script src="/voice-engine.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f7f4;min-height:100vh;display:flex;align-items:center;justify-content:center;}
@@ -327,6 +328,25 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f7f4;min-height:1
 .ob-dots{display:flex;justify-content:center;gap:6px;}
 .ob-dot{width:8px;height:8px;border-radius:50%;background:#ddd;transition:background 0.2s;}
 .ob-dot.active{background:var(--green);}
+/* VOICE SETUP */
+#voice-setup{overflow-y:auto;}
+.vs-header{background:linear-gradient(135deg,#1a4a32,#2e7d52);padding:24px 20px 20px;}
+.vs-header h2{font-size:22px;font-weight:700;color:white;margin-bottom:4px;}
+.vs-header p{font-size:13px;color:rgba(255,255,255,0.7);}
+.vs-progress-bar{height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin-top:14px;}
+.vs-progress-fill{height:100%;background:#52c77d;border-radius:2px;transition:width 0.4s;}
+.vs-body{display:flex;flex-direction:column;align-items:center;padding:40px 24px;gap:28px;}
+.vs-word{font-size:52px;font-weight:800;color:var(--text);letter-spacing:2px;text-align:center;}
+.vs-status{font-size:13px;color:var(--sub);height:18px;}
+.vs-rec-btn{width:80px;height:80px;border-radius:50%;border:none;font-size:32px;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,0.15);}
+.vs-rec-btn.idle{background:#2e7d52;color:white;}
+.vs-rec-btn.recording{background:#c0392b;color:white;animation:pulse 1s infinite;}
+.vs-rec-btn.done{background:#e8f5ee;color:#2e7d52;}
+@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
+.vs-actions{display:flex;gap:12px;align-items:center;}
+.vs-play-btn{background:var(--gl);color:var(--green);border:none;border-radius:20px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+.vs-skip{background:none;border:none;color:var(--sub);font-size:13px;cursor:pointer;font-family:inherit;padding:8px;}
+.vs-counter{font-size:13px;color:var(--sub);}
 </style>
 <script src="config.js"></script>
 </head>
@@ -443,6 +463,14 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f7f4;min-height:1
       <div class="hc-info">
         <div class="hc-title">I want to earn</div>
         <div class="hc-desc">Go online as a native speaker and earn money for every minute of conversation</div>
+      </div>
+      <div class="hc-arrow">→</div>
+    </div>
+    <div class="home-card" onclick="showScreen('voice-setup');initVoiceSetup()">
+      <div class="hc-icon">🎙️</div>
+      <div class="hc-info">
+        <div class="hc-title">My Voice</div>
+        <div class="hc-desc" id="voice-home-desc">Record words so the AI speaks in your own voice</div>
       </div>
       <div class="hc-arrow">→</div>
     </div>
@@ -812,6 +840,29 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f7f4;min-height:1
     <button class="primary-btn" onclick="showScreen('lang-select')">← Start New Call</button>
     <button class="secondary-btn" onclick="window.print()">🖨 Print Report</button>
     <button class="secondary-btn" onclick="showScreen('home')">🏠 Home</button>
+  </div>
+</div>
+
+<!-- VOICE SETUP -->
+<div id="voice-setup" class="screen">
+  <div class="vs-header">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <button onclick="showScreen('home')" class="back-btn" style="color:rgba(255,255,255,0.7);">←</button>
+      <span style="font-size:15px;font-weight:700;color:white;">Voice Library</span>
+    </div>
+    <p style="font-size:13px;color:rgba(255,255,255,0.7);">Record each word — the AI will speak in your voice</p>
+    <div class="vs-progress-bar"><div class="vs-progress-fill" id="vs-progress-fill" style="width:0%"></div></div>
+  </div>
+  <div class="vs-body">
+    <div class="vs-counter" id="vs-counter">0 / 0 words recorded</div>
+    <div class="vs-word" id="vs-word">—</div>
+    <div class="vs-status" id="vs-status">Tap the mic to record</div>
+    <button class="vs-rec-btn idle" id="vs-rec-btn" onclick="vsToggleRecord()">🎙️</button>
+    <div class="vs-actions">
+      <button class="vs-play-btn" id="vs-play-btn" style="display:none" onclick="vsPlayback()">▶ Hear it</button>
+      <button class="vs-play-btn" id="vs-next-btn" style="display:none;background:#2e7d52;color:white;" onclick="vsNextWord()">Next →</button>
+      <button class="vs-skip" onclick="vsSkipWord()">skip</button>
+    </div>
   </div>
 </div>
 
@@ -1559,7 +1610,13 @@ async function displayMia(data){
   setAIStatus(`${selLang.flag} Speaking…`);
   document.getElementById('ai-input').disabled=true;
   document.getElementById('ai-send-btn').disabled=true;
-  await speak(data.german);
+  const wordCount=await VoiceEngine.countWords('en');
+  if(selLang?.code==='en' && wordCount>=5){
+    setAIStatus('🎙️ Your voice…');
+    await VoiceEngine.speakWithUserVoice(data.german,'en');
+  }else{
+    await speak(data.german);
+  }
   document.getElementById('ai-input').disabled=false;
   document.getElementById('ai-send-btn').disabled=false;
   setMicState('idle');
@@ -2553,6 +2610,114 @@ document.getElementById('daily-vocab-home-card').onclick=function(){
 
 // Init on load
 setTimeout(initDailyVocab, 100);
+
+// ── VOICE SETUP ──────────────────────────────────────────────────────────────
+const VS_WORDS = [
+  'the','I','you','it','is','that','good','right','okay','yes',
+  'no','me','my','your','what','how','can','do','now','think',
+  'more','very','just','like','know','well','so','here','get','go',
+  'say','tell','speak','understand','interesting','sounds','really',
+  'let','about','moment','point','made','learning','with','confidence'
+];
+
+let vsWords=[], vsIndex=0, vsRecorder=null, vsStream=null, vsChunks=[], vsLastBlob=null, vsRecording=false;
+
+async function initVoiceSetup(){
+  const recorded = await VoiceEngine.getAllWords('en');
+  vsWords = VS_WORDS.filter(w => !recorded.has(w));
+  if(vsWords.length===0){ alert('All words recorded! Great job.'); showScreen('home'); return; }
+  vsIndex=0;
+  vsRender(recorded.size);
+}
+
+function vsRender(doneCount){
+  const total=VS_WORDS.length;
+  const done=doneCount!==undefined ? doneCount : total-vsWords.length+vsIndex;
+  document.getElementById('vs-counter').textContent=`${done} / ${total} words recorded`;
+  document.getElementById('vs-progress-fill').style.width=(done/total*100)+'%';
+  document.getElementById('vs-word').textContent=vsWords[vsIndex]||'✅ Done!';
+  document.getElementById('vs-status').textContent='Tap the mic to record';
+  document.getElementById('vs-rec-btn').className='vs-rec-btn idle';
+  document.getElementById('vs-rec-btn').textContent='🎙️';
+  document.getElementById('vs-play-btn').style.display='none';
+  document.getElementById('vs-next-btn').style.display='none';
+  vsLastBlob=null; vsRecording=false;
+}
+
+async function vsToggleRecord(){
+  if(vsRecording){ vsStopRecord(); return; }
+  try{
+    vsStream=await navigator.mediaDevices.getUserMedia({audio:true});
+    vsChunks=[];
+    vsRecorder=new MediaRecorder(vsStream);
+    vsRecorder.ondataavailable=e=>vsChunks.push(e.data);
+    vsRecorder.onstop=vsOnStop;
+    vsRecorder.start();
+    vsRecording=true;
+    document.getElementById('vs-rec-btn').className='vs-rec-btn recording';
+    document.getElementById('vs-rec-btn').textContent='⏹';
+    document.getElementById('vs-status').textContent='Recording… tap to stop';
+    // auto-stop after 4s
+    setTimeout(()=>{ if(vsRecording) vsStopRecord(); },4000);
+  }catch(e){
+    document.getElementById('vs-status').textContent='Microphone not available';
+  }
+}
+
+function vsStopRecord(){
+  if(!vsRecorder||!vsRecording)return;
+  vsRecorder.stop();
+  vsStream.getTracks().forEach(t=>t.stop());
+  vsRecording=false;
+}
+
+function vsOnStop(){
+  vsLastBlob=new Blob(vsChunks,{type:'audio/webm'});
+  document.getElementById('vs-rec-btn').className='vs-rec-btn done';
+  document.getElementById('vs-rec-btn').textContent='✓';
+  document.getElementById('vs-status').textContent='Saved! Play it back or go next.';
+  document.getElementById('vs-play-btn').style.display='';
+  document.getElementById('vs-next-btn').style.display='';
+}
+
+async function vsPlayback(){
+  if(!vsLastBlob)return;
+  const buf=await vsLastBlob.arrayBuffer();
+  await VoiceEngine.playBuffer(buf);
+}
+
+async function vsNextWord(){
+  if(vsLastBlob){
+    await VoiceEngine.saveWord('en', vsWords[vsIndex], vsLastBlob);
+  }
+  vsIndex++;
+  if(vsIndex>=vsWords.length){
+    const total=VS_WORDS.length;
+    const recorded=await VoiceEngine.countWords('en');
+    document.getElementById('vs-word').textContent='🎉 Done!';
+    document.getElementById('vs-counter').textContent=`${recorded} / ${total} words recorded`;
+    document.getElementById('vs-progress-fill').style.width='100%';
+    document.getElementById('vs-status').textContent='Your voice library is ready!';
+    document.getElementById('vs-rec-btn').style.display='none';
+    document.getElementById('vs-play-btn').style.display='none';
+    document.getElementById('vs-next-btn').style.display='none';
+    setTimeout(async()=>{ await updateVoiceHomeCard(); showScreen('home'); },2000);
+    return;
+  }
+  vsRender();
+}
+
+function vsSkipWord(){ vsIndex++; if(vsIndex>=vsWords.length){ showScreen('home'); return; } vsRender(); }
+
+async function updateVoiceHomeCard(){
+  const count=await VoiceEngine.countWords('en');
+  const total=VS_WORDS.length;
+  const el=document.getElementById('voice-home-desc');
+  if(el) el.textContent=count>0?`${count}/${total} words recorded — ${count>=5?'AI uses your voice in English calls':'record more to activate'}` : 'Record words so the AI speaks in your own voice';
+}
+
+updateVoiceHomeCard();
+// ─────────────────────────────────────────────────────────────────────────────
 </script>
 </body>
 </html>
