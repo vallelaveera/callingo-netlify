@@ -1,39 +1,25 @@
-# Cloudflare Worker — Claude proxy
+# cloudflare/ — local dev helper
 
-Replaces `netlify/functions/claude.js`. Free tier: 100,000 requests/day, unlimited deploys.
+The production deploy lives at the repo root (`wrangler.toml` + `worker.js`).
+Pushing to `main` triggers a Workers Builds deploy automatically.
 
-## One-time setup
+This folder only contains `devserver.js`, a small Node script that — when running
+in a GitHub Codespace — serves `public/` and proxies `/api/claude` to a locally
+running `wrangler dev` instance (on port 8787). Useful for in-browser testing
+without flipping Codespace port visibility.
+
+## Local dev
 
 ```bash
-npm install -g wrangler
-wrangler login
+# Terminal 1: run the Worker locally
+npx wrangler dev               # from repo root; uses .dev.vars for the API key
+
+# Terminal 2: serve public/ + proxy /api/claude → 8787
+node cloudflare/devserver.js   # listens on port 8080
 ```
 
-## Deploy
+Put your Anthropic key in a gitignored `.dev.vars` file at the repo root:
 
-```bash
-cd cloudflare
-wrangler secret put ANTHROPIC_API_KEY   # paste your key when prompted
-wrangler deploy
 ```
-
-After deploy, Cloudflare prints a URL like:
-`https://callingo-claude.<your-subdomain>.workers.dev`
-
-That URL (with no path) is your new API endpoint. Use it in the mobile app config.
-
-## Local test
-
-```bash
-wrangler dev
-# then in another shell:
-curl -X POST http://localhost:8787 \
-  -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"hi"}]}'
-```
-
-## Update the secret later
-
-```bash
-wrangler secret put ANTHROPIC_API_KEY
+ANTHROPIC_API_KEY=sk-ant-...
 ```

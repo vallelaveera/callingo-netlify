@@ -1,3 +1,6 @@
+// Single Worker entry point. Static files in `public/` are served automatically
+// by the assets binding; this Worker handles the `/api/claude` proxy.
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
@@ -6,6 +9,12 @@ const CORS = {
 
 export default {
   async fetch(request, env) {
+    const url = new URL(request.url);
+
+    if (url.pathname !== '/api/claude') {
+      return new Response('Not found', { status: 404 });
+    }
+
     if (request.method === 'OPTIONS') {
       return new Response('', { status: 200, headers: CORS });
     }

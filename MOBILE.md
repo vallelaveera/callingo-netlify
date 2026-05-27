@@ -9,40 +9,40 @@ There are two halves:
 
 ---
 
-## Part 1 — Cloudflare Worker (backend)
+## Part 1 — Cloudflare deploy (one-time)
 
-The mobile app must call an absolute https URL. Run this once.
+The repo is set up for **Workers Builds**: every push to `main` auto-deploys.
+You only do this UI step once.
 
-```bash
-npm install -g wrangler
-wrangler login          # opens a browser
+1. Sign in at https://dash.cloudflare.com.
+2. **Workers & Pages → Create → Connect to Git**, select this repo, branch `main`.
+3. The build picks up `wrangler.toml` at the repo root automatically — no build
+   command, no output dir.
+4. Under the project's **Settings → Variables and Secrets**, add `ANTHROPIC_API_KEY`
+   (type: secret) with your `sk-ant-...` key. Trigger a redeploy after adding it.
+5. Cloudflare gives you a URL like `https://callingo.<your-subdomain>.workers.dev`.
 
-cd cloudflare
-wrangler secret put ANTHROPIC_API_KEY   # paste your key
-wrangler deploy
-```
-
-Wrangler prints a URL like `https://callingo-claude.<your-subdomain>.workers.dev`.
-Copy that URL.
+The web app at that URL is fully functional — `/api/claude` is the Worker, all
+other paths serve `public/`.
 
 **Test it:**
 ```bash
-curl -X POST https://callingo-claude.<your-subdomain>.workers.dev \
+curl -X POST https://callingo.<your-subdomain>.workers.dev/api/claude \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"say hi in 3 words"}]}'
 ```
 
-You should see a JSON response with Claude's reply.
-
 ---
 
-## Part 2 — Point the app at your Worker
+## Part 2 — Point the mobile app at the deployed URL
 
-Edit `public/config.js` and replace the placeholder URL:
+For the web build, `public/config.js` already uses `/api/claude` (same origin —
+works on the Pages-style URL). For the Capacitor Android build, the HTML loads
+from local file storage, so the URL **must be absolute**:
 
 ```js
 window.APP_CONFIG = {
-  apiUrl: 'https://callingo-claude.<your-subdomain>.workers.dev',
+  apiUrl: 'https://callingo.<your-subdomain>.workers.dev/api/claude',
 };
 ```
 
@@ -144,9 +144,11 @@ For fast iteration during dev, you can also point Capacitor at a live web server
 ## Layout reference
 
 ```
-cloudflare/         # Worker code (replaces netlify/functions)
-  worker.js
-  wrangler.toml
+wrangler.toml       # Cloudflare Workers Builds config
+worker.js           # /api/claude proxy; static assets served from public/
+
+cloudflare/
+  devserver.js      # local dev helper (Codespace browser testing)
   README.md
 
 public/             # the web app — single source of truth
